@@ -1,0 +1,9 @@
+[package]
+name = "erode"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+macroquad = "0.4.13"
+mlua = { version = "0.9.9", features = ["async"] }
+rlua = "0.20.1"
