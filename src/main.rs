@@ -45,6 +45,11 @@ impl LuaUserData for LuaTexture2D{
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_method("width", |_, this, ()| Ok(this.0.width()));
         methods.add_method("height", |_, this, ()| Ok(this.0.height()));
+        methods.add_method_mut("update", |_, this, (image): (LuaAnyUserData)| {
+            let image = image.borrow::<LuaImage>()?;
+            this.0.update(&image.0);
+            Ok(())
+        });
     }
 }
 
@@ -61,6 +66,10 @@ impl LuaUserData for LuaImage {
         methods.add_method_mut("set_pixel", |_, this, (x, y, r, g, b, a): (u32, u32, f32, f32, f32, f32)| {
             this.0.set_pixel(x, y, Color::new(r, g, b, a));
             Ok(())
+        });
+        methods.add_method("get_pixel", |_, this, (x, y): (u32, u32) | {
+            let pixel = this.0.get_pixel(x, y);
+            Ok((pixel.r, pixel.g, pixel.b, pixel.a))
         });
         methods.add_method("to_texture", |_, this, ()| {
             let texture = Texture2D::from_image(&this.0);
@@ -120,6 +129,11 @@ async fn send_fns_to_lua(lua: &Lua, level_tree: Rc<RefCell<LevelTree>>) -> LuaRe
 
     globals.set("screen_width", lua.create_function(|_, ():()| {
         Ok(screen_width())
+    })?)?;
+    globals.set("mouse_position", lua.create_function(|_, ():()|{
+        let (x, y) = mouse_position();
+        let (rx, ry) = (x as u32, y as u32);
+        Ok((rx, ry))
     })?)?;
 
     globals.set("draw_texture_part", lua.create_function(

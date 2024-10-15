@@ -14,6 +14,7 @@ local level = {
     x = 0,
     y = 0,
   }
+  column = {},
 }
 
 function update()
