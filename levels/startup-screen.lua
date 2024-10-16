@@ -13,9 +13,22 @@ local state = {
   screen_height = 0,
   last_update = nil,
   column = 0,
-  right = 0
+  right = 0,
+  progress = 0
 }
+
+-- TODO DEFINTELY move this into its own script
+-- FONT RENDERING
 local font = {
+  [" "] = {
+    "00000",
+    "00000",
+    "00000",
+    "00000",
+    "00000",
+    "00000",
+    "00000",
+  },
   A = {
     "01110",
     "10001",
@@ -25,7 +38,249 @@ local font = {
     "10001",
     "10001",
   },
-
+  B = {
+    "11110",
+    "10001",
+    "11110",
+    "10001",
+    "10001",
+    "10001",
+    "11110"
+  },
+  C = {
+    "01111",
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "01111"
+  },
+  D = {
+    "11110",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "11110",
+  },
+  E = {
+    "11111",
+    "10000",
+    "10000",
+    "11111",
+    "10000",
+    "10000",
+    "11111"
+  },
+  F = {
+    "11111",
+    "10000",
+    "10000",
+    "11111",
+    "10000",
+    "10000",
+    "10000"
+  },
+  G = {
+    "11111",
+    "10000",
+    "10000",
+    "10011",
+    "10001",
+    "10001",
+    "11111"
+  },
+  H = {
+    "10001",
+    "10001",
+    "10001",
+    "11111",
+    "10001",
+    "10001",
+    "10001"
+  },
+  I = {
+    "11111",
+    "00100",
+    "00100",
+    "00100",
+    "00100",
+    "00100",
+    "11111"
+  },
+  J = {
+    "11111",
+    "00001",
+    "00001",
+    "00001",
+    "00001",
+    "10011",
+    "11110"
+  },
+  K = {
+    "10001",
+    "10010",
+    "10100",
+    "11000",
+    "11000",
+    "10110",
+    "10001",
+  },
+  L = {
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "10000",
+    "11111"
+  },
+  M = {
+    "10001",
+    "11011",
+    "10100",
+    "10001",
+    "10001",
+    "10001",
+    "10001"
+  },
+  N = {
+    "10001",
+    "10001",
+    "11001",
+    "10101",
+    "10011",
+    "10001",
+    "10001",
+  },
+  O = {
+    "00100",
+    "01010",
+    "10001",
+    "10001",
+    "10001",
+    "01010",
+    "00100",
+  },
+  P = {
+    "11110",
+    "10001",
+    "10001",
+    "11110",
+    "10000",
+    "10000",
+    "10000",
+  },
+  Q = {
+    "00100",
+    "01010",
+    "10001",
+    "10001",
+    "10101",
+    "01010",
+    "00101",
+  },
+  R = {
+    "11110",
+    "10001",
+    "10001",
+    "11110",
+    "10100",
+    "10010",
+    "10001",
+  },
+  S = {
+    "01111",
+    "10000",
+    "10000",
+    "01110",
+    "00001",
+    "00001",
+    "11110",
+  },
+  T = {
+    "11111",
+    "00100",
+    "00100",
+    "00100",
+    "00100",
+    "00100",
+    "00100"
+  },
+  U = {
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "11111",
+  },
+  V = {
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "11011",
+    "11011",
+    "11111",
+  },
+  W = {
+    "10001",
+    "10001",
+    "10001",
+    "10001",
+    "10101",
+    "11011",
+    "10001"
+  },
+  X = {
+    "10001",
+    "01010",
+    "00100",
+    "00100",
+    "01010",
+    "10001",
+    "10001",
+  },
+  Y = {
+    "10001",
+    "01010",
+    "00100",
+    "00100",
+    "00100",
+    "00100",
+    "00100",
+  },
+  Z = {
+    "11111",
+    "00001",
+    "00010",
+    "00100",
+    "01000",
+    "10000",
+    "11111",
+  },
+   ["?"] = {
+    "01110",
+    "10001",
+    "00001",
+    "00101",
+    "00110",
+    "00000",
+    "00100",
+  },
+  ["."] = {
+    "00000",
+    "00000",
+    "00000",
+    "00000",
+    "00000",
+    "11000",
+    "11000",
+  }
 }
 
 function update()
@@ -62,14 +317,14 @@ function update_state()
   -- handle mouse
   x, y = mouse_position()
   if x and y then
-     if x > state.column then
+     if x > state.column + 50 then
       -- on right side of line 
       if state.right == 0 then
         draw_circle(x, y, 50, 0, 0, 0, 1, state.square_image)
       else
         draw_circle(x, y, 50, 1, 1, 1, 1, state.square_image)
       end
-    else
+    elseif x < state.column - 50 then
       if state.right == 0 then
         draw_circle(x, y, 50, 1, 1, 1, 1, state.square_image)
       else
@@ -78,10 +333,21 @@ function update_state()
     end
   end
 
-  draw_inverted_text(100, 100, "A", 5, state.square_image)
+  local clicked = mouse_clicked()
+  if clicked == 1 then
+    state.progress = state.progress + 1
+    invert_img_pixels(state.square_image)
+  end
 
+  draw_text()
   -- update the texture 
   state.square_texture:update(state.square_image)
+
+  -- not ideal. We need to re-invert (but not display)
+  -- the text pixels after we draw them to the image,
+  -- otherwise it the text flickers between white/black 
+  -- each frame and just appears grey
+  draw_text()
 end
 
 function setup()
@@ -111,6 +377,19 @@ end
 function draw()
   draw_texture(state.square_texture, 0, 0)
 end
+function match_progress()
+  if state.progress == 0 then
+    return "BEGIN?"
+  elseif state.progress == 1 then
+    return "ARE YOU SURE?"
+  elseif state.progress == 2 then
+    return "DO NOT SAY YOU HAD NO WARNING."
+  elseif state.progress == 3 then
+    return"YOUR ACTIONS WILL HAVE CONSEQUENCES."
+  else
+    return ""
+  end
+end
 
 function draw_circle(x, y, radius, r, g, b, a, image)
   local height = screen_height()
@@ -136,28 +415,64 @@ function invert_pixel(x, y, image)
         image:set_pixel(x, y, 1, 1, 1, 1)
     end
 end
+--[[
+function invert_img_pixels(img)
+  local width = img:width()
+  local height = img:height()
+
+  for x = 0, width - 1 do
+    for y = 0, height - 1 do
+      invert_pixel(x, y, img)
+    end
+  end
+
+  -- doing this here is a good idea
+  -- (but only in this particular level)
+  if state.right == 1 then
+    state.right = 0 else state.right = 1
+  end
+end
+--]]
+--
+
+-- it is MUCH better to loop in rust rather than lua ... duh
+function invert_img_pixels(img)
+  img:invert_pixels()
+  if state.right == 1 then state.right = 0 else state.right = 1 end
+end
+
+function draw_text()
+  local text = match_progress()
+  local scale = 7
+  local offset_x = #text * 5 * scale / 2
+  local offset_y =  7 * scale / 2
+  draw_inverted_text(state.screen_width / 2 - offset_x, state.screen_height / 2 + offset_y, text, scale, state.square_image)
+end
 
 function draw_inverted_text(x, y, text, scale, image)
-    for i = 1, #text do
-        local char = text:sub(i, i)
-        local glyph = font[char]
-        if glyph then
-            for gy = 1, #glyph do
-                for gx = 1, #glyph[gy] do
-                    if glyph[gy]:sub(gx, gx) == "1" then
-                        for sx = 0, scale - 1 do
-                            for sy = 0, scale - 1 do
-                                local px = x + (i - 1) * 6 * scale + (gx - 1) * scale + sx
-                                local py = y + (gy - 1) * scale + sy
-                                invert_pixel(px, py, image)
-                            end
-                        end
-                    end
-                end
+  for i = 1, #text do
+    local char = text:sub(i, i)
+    local glyph = font[char]
+    if glyph then
+      for gy = 1, #glyph do
+        for gx = 1, #glyph[gy] do
+          if glyph[gy]:sub(gx, gx) == "1" then
+            local base_x = x + (i - 1) * 6 * scale + (gx - 1) * scale
+            local base_y = y + (gy - 1) * scale
+            for sx = 0, scale - 1 do
+              for sy = 0, scale - 1 do
+                local px = base_x + sx
+                local py = base_y + sy
+                invert_pixel(px, py, image)
+              end
             end
+          end
         end
+      end
     end
+  end
 end
+
 function draw_inverse_circle(x, y, radius, image)
   local count = 0
   local height = screen_height()

@@ -1,5 +1,7 @@
+use std::env;
 use macroquad::prelude::*;
 use mlua::prelude::*;
+use mlua::{Lua, LuaOptions, StdLib, Result};
 use std::fs;
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -75,6 +77,10 @@ impl LuaUserData for LuaImage {
             let texture = Texture2D::from_image(&this.0);
             Ok(LuaTexture2D(texture))
         });
+        methods.add_method_mut("invert_pixels", |_, this, ()| {
+            invert_all_pixels(&mut this.0);
+            Ok(())
+        });
     }
 }
 
@@ -121,6 +127,15 @@ async fn send_fns_to_lua(lua: &Lua, level_tree: Rc<RefCell<LevelTree>>) -> LuaRe
 
     globals.set("new_level", lua.create_function(|_, (lua_script): (String)| {
         Ok(LuaLevel::new(lua_script))
+    })?)?;
+    
+    // returns 1 if lmb has been pressed once
+    globals.set("mouse_clicked", lua.create_function(|_, ():()| {
+        let mut pressed: u8 = 0;
+        if is_mouse_button_pressed(MouseButton::Left) {
+            pressed = 1;
+        }
+        Ok(pressed)
     })?)?;
 
     globals.set("screen_height", lua.create_function(|_, ():()| {
@@ -195,8 +210,28 @@ async fn send_fns_to_lua(lua: &Lua, level_tree: Rc<RefCell<LevelTree>>) -> LuaRe
     Ok(())
 }
 
+fn invert_all_pixels(img: &mut Image) {
+    for x in 0..img.width() as u32 {
+        for y in 0..img.height() as u32 {
+            let col = img.get_pixel(x, y);
+            if col.r > 0.9 {
+                img.set_pixel(x, y, BLACK);
+            } else {
+                img.set_pixel(x, y, WHITE);
+            }
+        }
+    }
+}
+
 fn runtime_manager() {
 
+}
+
+fn initialize_lua() -> Result<Lua> {
+    let opts = LuaOptions::new();
+    let libs = StdLib::STRING | StdLib::TABLE | StdLib::MATH | StdLib::IO | StdLib::OS | StdLib::PACKAGE; 
+
+    Lua::new_with(libs, opts)
 }
 
 #[macroquad::main("ERODE")]
@@ -215,6 +250,7 @@ async fn main() {
         children: vec![],
     };
     let lua = Lua::new();
+//    let lua = initialize_lua().unwrap();
     let level_tree = Rc::new(RefCell::new(LevelTree { current: startup_screen }));
     send_fns_to_lua(&lua, level_tree.clone()).await.expect("Failed to send fns to lua!");
 
