@@ -4,7 +4,6 @@
 ---@diagnostic disable: undefined-field
 
 
-
 local state = {
   setup = nil,
   square_image = nil,
@@ -320,15 +319,15 @@ function update_state()
      if x > state.column + 50 then
       -- on right side of line 
       if state.right == 0 then
-        draw_circle(x, y, 50, 0, 0, 0, 1, state.square_image)
+        state.square_image:draw_circle(x, y, 50, 0, 0, 0, 1)
       else
-        draw_circle(x, y, 50, 1, 1, 1, 1, state.square_image)
+        state.square_image:draw_circle(x, y, 50, 1, 1, 1, 1)
       end
     elseif x < state.column - 50 then
       if state.right == 0 then
-        draw_circle(x, y, 50, 1, 1, 1, 1, state.square_image)
+        state.square_image:draw_circle(x, y, 50, 1, 1, 1, 1)
       else
-        draw_circle(x, y, 50, 0, 0, 0, 1, state.square_image)
+        state.square_image:draw_circle(x, y, 50, 0, 0, 0, 1)
       end
     end
   end
@@ -338,16 +337,11 @@ function update_state()
     state.progress = state.progress + 1
     invert_img_pixels(state.square_image)
   end
-
+  local temp_img = state.square_image:clone()
   draw_text()
   -- update the texture 
   state.square_texture:update(state.square_image)
-
-  -- not ideal. We need to re-invert (but not display)
-  -- the text pixels after we draw them to the image,
-  -- otherwise it the text flickers between white/black 
-  -- each frame and just appears grey
-  draw_text()
+  state.square_image = temp_img
 end
 
 function setup()
@@ -391,22 +385,6 @@ function match_progress()
   end
 end
 
-function draw_circle(x, y, radius, r, g, b, a, image)
-  local height = screen_height()
-  local width = screen_width()
-
-  for w = math.max(0, x - radius), math.min(width - 1, x + radius) do
-    for h = math.max(0, y - radius), math.min(height - 1, y + radius) do
-      local dx = w - x
-      local dy = h - y
-      if dx * dx + dy * dy < radius^2 then
-        image:set_pixel(w, h, r, g, b, a)
-      end
-    end
-  end
-end
-
-
 function invert_pixel(x, y, image)
     local r, g, b, a = image:get_pixel(x, y)
     if r ==1 then
@@ -415,27 +393,7 @@ function invert_pixel(x, y, image)
         image:set_pixel(x, y, 1, 1, 1, 1)
     end
 end
---[[
-function invert_img_pixels(img)
-  local width = img:width()
-  local height = img:height()
 
-  for x = 0, width - 1 do
-    for y = 0, height - 1 do
-      invert_pixel(x, y, img)
-    end
-  end
-
-  -- doing this here is a good idea
-  -- (but only in this particular level)
-  if state.right == 1 then
-    state.right = 0 else state.right = 1
-  end
-end
---]]
---
-
--- it is MUCH better to loop in rust rather than lua ... duh
 function invert_img_pixels(img)
   img:invert_pixels()
   if state.right == 1 then state.right = 0 else state.right = 1 end
