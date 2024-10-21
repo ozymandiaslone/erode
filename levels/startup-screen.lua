@@ -17,6 +17,7 @@ local state = {
 }
 
 -- TODO DEFINTELY move this into its own script
+-- (when i have the willpower)
 -- FONT RENDERING
 local font = {
   [" "] = {

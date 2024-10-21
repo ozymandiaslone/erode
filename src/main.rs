@@ -84,7 +84,7 @@ impl LuaUserData for LuaImage {
     Ok(())
    });
    methods.add_method("clone", |_, this, ()| {
-    Ok((LuaImage(this.0.clone())))
+    Ok(LuaImage(this.0.clone()))
    });
    methods.add_method_mut("draw_circle", |_, this, (x, y, radius, r, g, b, a): (u32, u32, u32, f32, f32, f32, f32)| {
       for w in std::cmp::min(0, x - radius)..std::cmp::min(this.0.width()  as u32, x+radius) {
@@ -127,15 +127,12 @@ async fn send_fns_to_lua(lua: &Lua, level_path: Arc<Mutex<String>>, level_tree: 
   let level_tree_clone = Rc::clone(&level_tree);
   */
   globals.set("add_level", lua.create_function_mut(move |_, path: String| {
-
-
     let mut level_path = match level_path.lock() {
       Ok(existing_path) => existing_path,
       Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not mutably borrow level tree".to_string()))
     };
     *level_path = path;
     println!("INFO: level_path set to path");
-
    Ok(()) 
   })?)?;
 
