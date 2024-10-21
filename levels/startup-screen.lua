@@ -345,6 +345,7 @@ function update_state()
 end
 
 function setup()
+  add_level("levels/forest.lua")
   while state.screen_width < 1920 or state.screen_height < 1080  do
     state.screen_width = screen_width()
     state.screen_height = screen_height()

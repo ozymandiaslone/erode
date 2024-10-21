@@ -1,4 +1,5 @@
 use std::env;
+use std::sync::{Arc, Mutex};
 use macroquad::prelude::*;
 use mlua::prelude::*;
 use mlua::{Lua, LuaOptions, StdLib, Result};
@@ -31,6 +32,7 @@ impl LevelTree {
   }
 }
 
+#[derive(Clone)]
 struct LuaLevel(Level);
 impl LuaUserData for LuaLevel {
   fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
@@ -106,17 +108,35 @@ impl LuaImage {
   }
 }
 
-async fn send_fns_to_lua(lua: &Lua, level_tree: Rc<RefCell<LevelTree>>) -> LuaResult<()> {
+async fn send_fns_to_lua(lua: &Lua, level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>) -> LuaResult<()> {
 
   let globals = lua.globals();
-  let level_tree_clone = Rc::clone(&level_tree);
+//  let level_tree_clone = Rc::clone(&level_tree);
+  /*
   globals.set("choose_next_level", lua.create_function_mut(move |_, branch: usize| {
-   let mut level_tree = level_tree_clone.borrow_mut();
+   let mut level_tree = match level_tree_clone.try_borrow_mut() {
+        Ok(tree) => tree,
+        Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not borrow level tree mutably.".to_string())),
+    };
    if let Some(_) = level_tree.traverse(branch) {
     Ok(())
    } else {
     Err(LuaError::RuntimeError("ERROR: Invalid branch traversal index".to_string()))
    }
+  })?)?;
+  let level_tree_clone = Rc::clone(&level_tree);
+  */
+  globals.set("add_level", lua.create_function_mut(move |_, path: String| {
+
+
+    let mut level_path = match level_path.lock() {
+      Ok(existing_path) => existing_path,
+      Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not mutably borrow level tree".to_string()))
+    };
+    *level_path = path;
+    println!("INFO: level_path set to path");
+
+   Ok(()) 
   })?)?;
 
   globals.set("new_image", lua.create_function(|_, (width, height): (u16, u16)| {
@@ -141,7 +161,7 @@ async fn send_fns_to_lua(lua: &Lua, level_tree: Rc<RefCell<LevelTree>>) -> LuaRe
    Ok(())
   })?)?;
 
-  globals.set("new_level", lua.create_function(|_, (lua_script): (String)| {
+  globals.set("new_level", lua.create_function(|_, lua_script: String| {
    Ok(LuaLevel::new(lua_script))
   })?)?;
   
@@ -243,11 +263,22 @@ fn runtime_manager() {
 
 }
 
-fn initialize_lua() -> Result<Lua> {
-  let opts = LuaOptions::new();
-  let libs = StdLib::STRING | StdLib::TABLE | StdLib::MATH | StdLib::IO | StdLib::OS | StdLib::PACKAGE; 
+fn handle_tree(level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>) {
+  if let Ok(mut path) = level_path.lock() {
+    if !path.is_empty() {
+      if let Ok(mut tree) = level_tree.lock() {
+        let new_lvl = Level {
+          lua_script: path.clone(),
+          children: Vec::new(),
+        };
+        tree.add_child(new_lvl);
+        println!("INFO: Added child level");
+        *path = String::new();
+        println!("INFO: Cleared path");
 
-  Lua::new_with(libs, opts)
+      }
+    }
+  }
 }
 
 #[macroquad::main("ERODE")]
@@ -263,42 +294,42 @@ async fn main() {
   // update fn which does whatever it wants
   set_fullscreen(true);
   let mut startup_screen = Level {
-    
-
-
     lua_script: "levels/startup-screen.lua".to_string(),
     children: vec![],
   };
   let lua = Lua::new();
-  let level_tree = Rc::new(RefCell::new(LevelTree { current: startup_screen }));
-  send_fns_to_lua(&lua, level_tree.clone()).await.expect("Failed to send fns to lua!");
-
-  let tree = level_tree.borrow();
-  let lua_script = fs::read_to_string(&tree.current.lua_script).expect("ERROR: could not load lua script from file.");
-  lua.load(&lua_script).exec().expect("failed to load lua script!!");
+  let level_tree = Arc::new(Mutex::new(LevelTree { current: startup_screen }));
+  let level_path = Arc::new(Mutex::new(String::new()));
+  send_fns_to_lua(&lua, level_path.clone(), level_tree.clone()).await.expect("Failed to send fns to lua!");
+  let tree_cl = level_tree.clone();
+  if let Ok(tree) = tree_cl.lock() {
+    let lua_script = fs::read_to_string(&tree.current.lua_script).expect("ERROR: could not load lua script from file.");
+    lua.load(&lua_script).exec().expect("failed to load lua script!!");
+  } else {
+    panic!("ERROR: Uh Oh - could not lock/load tree/script");
+  }
 
   loop {
-   if screen_width() < 1200. {
-    set_fullscreen(true);
-    next_frame().await
-   } else {
-
-    clear_background(BLUE);
-    // Fetch the Lua `update` function and call it if it exists
-    if let Ok(update_fn) = lua.globals().get::<_, mlua::Function>("update") {
-     if let Err(e) = update_fn.call::<_, ()>(()) {
-      eprintln!("ERROR: Lua update function failed: {}", e);
-     }
+    if screen_width() < 1200. {
+      set_fullscreen(true);
+      next_frame().await
     } else {
+      clear_background(BLUE);
+      handle_tree(level_path.clone(), level_tree.clone());
+      // Fetch the Lua `update` function and call it if it exists
+      if let Ok(update_fn) = lua.globals().get::<_, mlua::Function>("update") {
+        if let Err(e) = update_fn.call::<_, ()>(()) {
+        eprintln!("ERROR: Lua update function failed: {}", e);
+      }
+      } else {
 
-     eprintln!("ERROR: No 'update' function found in Lua");
-    }
+        eprintln!("ERROR: No 'update' function found in Lua");
+      }
+      // print fps info (for development purposes)
+      let fps: i32 = get_fps();
+      draw_text(&format!("FPS: {}", fps), 20.0, 20.0, 30.0, WHITE);
 
-    // print fps info (for development purposes)
-    let fps = get_fps();
-    draw_text(&format!("FPS: {}", fps), 20.0, 20.0, 30.0, WHITE);
-
-    next_frame().await
-   }
+      next_frame().await
+     }
   }
 }
