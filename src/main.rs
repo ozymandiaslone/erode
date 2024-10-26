@@ -1,13 +1,14 @@
 use std::env;
 use std::sync::{Arc, Mutex};
 use macroquad::prelude::*;
+use macroquad::audio::{load_sound, play_sound, play_sound_once, PlaySoundParams, Sound};
 use mlua::prelude::*;
 use mlua::{Lua, LuaOptions, StdLib, Result};
 use std::fs;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 struct Level {
   lua_script: String,
   children: Vec<Level>,
@@ -15,6 +16,7 @@ struct Level {
 
 struct LevelTree {
   current: Level,
+  buffer: Level,
 }
 
 impl LevelTree {
@@ -29,6 +31,22 @@ impl LevelTree {
   }
   fn add_child(&mut self, child: Level) {
      self.current.children.push(child);
+  }
+}
+
+struct LuaSound(Sound); 
+impl LuaUserData for LuaSound {
+  fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
+     methods.add_method("play_once", |_, this, (): ()| {
+       play_sound_once(&this.0);
+       Ok(())
+     });
+  }
+}
+
+impl LuaSound {
+  async fn new(path: String) -> Self {
+    LuaSound(load_sound(&path).await.expect("ERROR: could not load sound"))
   }
 }
 
@@ -111,33 +129,46 @@ impl LuaImage {
 async fn send_fns_to_lua(lua: &Lua, level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>) -> LuaResult<()> {
 
   let globals = lua.globals();
-//  let level_tree_clone = Rc::clone(&level_tree);
-  /*
-  globals.set("choose_next_level", lua.create_function_mut(move |_, branch: usize| {
-   let mut level_tree = match level_tree_clone.try_borrow_mut() {
-        Ok(tree) => tree,
-        Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not borrow level tree mutably.".to_string())),
-    };
-   if let Some(_) = level_tree.traverse(branch) {
-    Ok(())
-   } else {
-    Err(LuaError::RuntimeError("ERROR: Invalid branch traversal index".to_string()))
-   }
-  })?)?;
-  let level_tree_clone = Rc::clone(&level_tree);
-  */
+  
   globals.set("add_level", lua.create_function_mut(move |_, path: String| {
     let mut level_path = match level_path.lock() {
       Ok(existing_path) => existing_path,
-      Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not mutably borrow level tree".to_string()))
+      Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not lock level_path".to_string()))
     };
     *level_path = path;
     println!("INFO: level_path set to path");
    Ok(()) 
   })?)?;
+  let tree_cl = level_tree.clone();
+
+  // returns 0 upon success
+  globals.set("change_level", lua.create_function_mut(move |_, script: String| {
+    println!("INFO: Change level called (at least)");
+    let mut tree = match tree_cl.lock() {
+      Ok(existing_tree) => existing_tree,
+      Err(_) => return Err(LuaError::RuntimeError("ERROR: Could not lock level tree".to_string())),
+    };
+    let mut found = 99999;
+    for (i, _) in tree.current.children.iter().enumerate() {
+      if tree.current.children[i].lua_script == script {
+        found = i
+      }
+    }
+    // if we have found 
+    if found < 99999 {
+      tree.current = tree.current.children[found].clone();
+      println!("INFO: CHANGED LEVEL");
+      return Ok(0)
+    }
+    Ok(1)
+  })?)?;
 
   globals.set("new_image", lua.create_function(|_, (width, height): (u16, u16)| {
    Ok(LuaImage::new(width, height))
+  })?)?;
+
+  globals.set("new_sound", lua.create_async_function(|_, path: String | async move{
+    Ok(LuaSound::new(path).await)
   })?)?;
 
   globals.set("draw_tint", lua.create_function(|_, pct: f32| {
@@ -160,6 +191,15 @@ async fn send_fns_to_lua(lua: &Lua, level_path: Arc<Mutex<String>>, level_tree: 
 
   globals.set("new_level", lua.create_function(|_, lua_script: String| {
    Ok(LuaLevel::new(lua_script))
+  })?)?;
+
+  globals.set("play_sound", lua.create_async_function(|_, wav_path: String| async move {
+    let sound = load_sound(&wav_path).await.expect("ERROR: Failed to load sound");
+    play_sound(&sound, PlaySoundParams {
+      looped: false,
+      volume: 1.0
+    });
+    Ok(())
   })?)?;
   
   // returns 1 if lmb has been pressed once
@@ -260,9 +300,10 @@ fn runtime_manager() {
 
 }
 
-fn handle_tree(level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>) {
+async fn handle_tree(level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>, lua: &mut Lua) {
   if let Ok(mut path) = level_path.lock() {
     if !path.is_empty() {
+      println!("INFO: Path is not empty");
       if let Ok(mut tree) = level_tree.lock() {
         let new_lvl = Level {
           lua_script: path.clone(),
@@ -274,6 +315,24 @@ fn handle_tree(level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>
         println!("INFO: Cleared path");
 
       }
+    }
+  }
+
+  let tree_cl = level_tree.clone();
+
+  if let Ok(mut tree) = level_tree.lock() {
+    if tree.current.lua_script != tree.buffer.lua_script{
+      // we need to update the lua runtime to the new level...
+      println!("INFO: Rinsing lua runtime");
+      let mut new_lua = Lua::new();
+      let lua_script = fs::read_to_string(&tree.current.lua_script).expect("ERROR: Could not load script from file.");
+      new_lua.load(&lua_script).exec().expect("ERROR: failed to load lua script.");
+      *lua = new_lua;
+      tree.buffer = tree.current.clone();
+      let path = Arc::new(Mutex::new(tree.current.lua_script.clone().to_string()));
+      println!("INFO: Sending fns to the lua runtime. Wish us luck.");
+      send_fns_to_lua(lua, path, tree_cl).await.expect("ERROR: Failed to send fns to lua.");
+      println!("INFO: Sent fns to new lua runtime :) ");
     }
   }
 }
@@ -290,12 +349,14 @@ async fn main() {
   // each lua level has a sorta generic
   // update fn which does whatever it wants
   set_fullscreen(true);
+
+  // The initial 'Level' is just the startup screen
   let mut startup_screen = Level {
     lua_script: "levels/startup-screen.lua".to_string(),
     children: vec![],
   };
-  let lua = Lua::new();
-  let level_tree = Arc::new(Mutex::new(LevelTree { current: startup_screen }));
+  let mut lua = Lua::new();
+  let level_tree = Arc::new(Mutex::new(LevelTree { current: startup_screen.clone(), buffer: startup_screen.clone() }));
   let level_path = Arc::new(Mutex::new(String::new()));
   send_fns_to_lua(&lua, level_path.clone(), level_tree.clone()).await.expect("Failed to send fns to lua!");
   let tree_cl = level_tree.clone();
@@ -312,8 +373,8 @@ async fn main() {
       next_frame().await
     } else {
       clear_background(BLUE);
-      handle_tree(level_path.clone(), level_tree.clone());
-      // Fetch the Lua `update` function and call it if it exists
+      handle_tree(level_path.clone(), level_tree.clone(), &mut lua).await;
+      // look for the Lua `update` function and call it if it exists
       if let Ok(update_fn) = lua.globals().get::<_, mlua::Function>("update") {
         if let Err(e) = update_fn.call::<_, ()>(()) {
         eprintln!("ERROR: Lua update function failed: {}", e);

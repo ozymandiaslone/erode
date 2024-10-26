@@ -13,7 +13,8 @@ local state = {
   last_update = nil,
   column = 0,
   right = 0,
-  progress = 0
+  progress = 0,
+  sounds = {}, 
 }
 
 -- TODO DEFINTELY move this into its own script
@@ -225,7 +226,7 @@ local font = {
     "10001",
     "11011",
     "11011",
-    "11111",
+    "01110",
   },
   W = {
     "10001",
@@ -283,11 +284,30 @@ local font = {
   }
 }
 
+
+function sleep(n)
+  local t = os.clock()
+  while os.clock() - t <= n do
+    -- nothing
+  end
+end
+
+local updated_once = nil
+
+-- update() function is called once each frame
+--
+-- call change_level() to change the level to a 
+-- level path you have created with add_level("some_level")
 function update()
-  if not state.setup then setup() end
+  if not state.setup then 
+    setup() 
+    sleep(0.05)
+  end
+  
   update_state()
   draw()
 end
+
 
 function update_state()
   -- draw this column either white or black
@@ -337,6 +357,7 @@ function update_state()
   if clicked == 1 then
     state.progress = state.progress + 1
     invert_img_pixels(state.square_image)
+    state.sounds.vine_boom:play_once()
   end
   local temp_img = state.square_image:clone()
   draw_text()
@@ -347,6 +368,12 @@ end
 
 function setup()
   add_level("levels/forest.lua")
+  while not next(state.sounds) do state.sounds.vine_boom = new_sound("assets/vine-boom.wav") end
+  while not state.sounds.soundscape1 do state.sounds.soundscape1 = new_sound("assets/soundscape1.wav") end
+
+  state.sounds.vine_boom:play_once()
+  state.sounds.soundscape1:play_once()
+
   while state.screen_width < 1920 or state.screen_height < 1080  do
     state.screen_width = screen_width()
     state.screen_height = screen_height()
@@ -373,16 +400,23 @@ end
 function draw()
   draw_texture(state.square_texture, 0, 0)
 end
+local changed = 1
 function match_progress()
   if state.progress == 0 then
-    return "BEGIN?"
+    return "READY?"
   elseif state.progress == 1 then
-    return "ARE YOU SURE?"
+    return "BEGIN?"
   elseif state.progress == 2 then
-    return "DO NOT SAY YOU HAD NO WARNING."
+    return "ARE YOU SURE?"
   elseif state.progress == 3 then
+    return "DO NOT SAY YOU HAD NO WARNING."
+  elseif state.progress == 4 then
     return"YOUR ACTIONS WILL HAVE CONSEQUENCES."
   else
+    print("INFO: Changing lvl")
+    -- change_level() returns 0 upon a successful level change
+    -- and returns 1 if it fails to change the level
+    if changed == 1 then changed = change_level("levels/forest.lua") end
     return ""
   end
 end
