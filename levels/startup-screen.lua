@@ -357,7 +357,7 @@ function update_state()
   if clicked == 1 then
     state.progress = state.progress + 1
     invert_img_pixels(state.square_image)
-    state.sounds.vine_boom:play_once()
+--    state.sounds.vine_boom:play_once()
   end
   local temp_img = state.square_image:clone()
   draw_text()
@@ -372,7 +372,7 @@ function setup()
   while not state.sounds.soundscape1 do state.sounds.soundscape1 = new_sound("assets/soundscape1.wav") end
 
   state.sounds.vine_boom:play_once()
-  state.sounds.soundscape1:play_once()
+--  state.sounds.soundscape1:play_once()
 
   while state.screen_width < 1920 or state.screen_height < 1080  do
     state.screen_width = screen_width()

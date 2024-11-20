@@ -5,5 +5,6 @@ edition = "2021"
 
 [dependencies]
 macroquad = { version = "0.4.13", features = ["audio"] }
-mlua = { version = "0.9.9", features = ["async", "lua51"] }
+mlua = { version = "0.9.9", features = ["async", "vendored", "lua51"]}
+#mlua = { version = "0.9.9", features = ["async", "lua51"] }
 

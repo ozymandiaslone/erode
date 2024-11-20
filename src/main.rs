@@ -1,3 +1,7 @@
+//TODO 
+// [ ] add rodio
+// [ ] make the rest of the game
+
 use std::env;
 use std::sync::{Arc, Mutex};
 use macroquad::prelude::*;
@@ -303,7 +307,6 @@ fn runtime_manager() {
 async fn handle_tree(level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<LevelTree>>, lua: &mut Lua) {
   if let Ok(mut path) = level_path.lock() {
     if !path.is_empty() {
-      println!("INFO: Path is not empty");
       if let Ok(mut tree) = level_tree.lock() {
         let new_lvl = Level {
           lua_script: path.clone(),
@@ -339,18 +342,10 @@ async fn handle_tree(level_path: Arc<Mutex<String>>, level_tree: Arc<Mutex<Level
 
 #[macroquad::main("ERODE")]
 async fn main() {
-
-
-  // maybe in the future to manage levels,
-  // I should create / kill a lua runtime
-  // for each level, that way I think
-  // I could potentially even maybe 
-  // reuse the rust loop logic, where
-  // each lua level has a sorta generic
-  // update fn which does whatever it wants
   set_fullscreen(true);
-
-  // The initial 'Level' is just the startup screen
+  // this is the initial level the 
+  // player starts at
+  // (the startup screen)
   let mut startup_screen = Level {
     lua_script: "levels/startup-screen.lua".to_string(),
     children: vec![],
@@ -364,7 +359,7 @@ async fn main() {
     let lua_script = fs::read_to_string(&tree.current.lua_script).expect("ERROR: could not load lua script from file.");
     lua.load(&lua_script).exec().expect("failed to load lua script!!");
   } else {
-    panic!("ERROR: Uh Oh - could not lock/load tree/script");
+    panic!("ERROR: Uh Oh - could not lock and load tree/script");
   }
 
   loop {
@@ -380,7 +375,6 @@ async fn main() {
         eprintln!("ERROR: Lua update function failed: {}", e);
       }
       } else {
-
         eprintln!("ERROR: No 'update' function found in Lua");
       }
       // print fps info (for development purposes)
